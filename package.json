@@ -1,0 +1,9 @@
+{
+  "name": "temu-poland-local-to-local-seller-center",
+  "version": "1.0.0",
+  "private": true,
+  "description": "网页样品：temu poland local to local seller center",
+  "scripts": {
+    "start": "npx serve . -l 5173"
+  }
+}

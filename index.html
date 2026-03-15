@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN" data-auth="session">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>商家协作台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <!-- 多语言 -->
+    <script src="./i18n.js"></script>
+    <!-- Google API Client -->
+    <script src="https://apis.google.com/js/api.js" async defer></script>
+    <!-- SheetJS for Excel parsing/export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <!-- 限流助手样式 -->
+    <link rel="stylesheet" href="./rate-limit.css" />
+  </head>
+  <body>
+
+    <!-- ===== 语言切换（全局浮动） ===== -->
+    <div class="lang-switcher">
+      <button class="lang-btn" data-lang="zh">中文</button>
+      <button class="lang-btn" data-lang="en">EN</button>
+      <button class="lang-btn" data-lang="pl">PL</button>
+    </div>
+
+    <!-- ===== 主应用 ===== -->
+    <div class="app-shell" id="app-shell">
+      <aside class="sidebar">
+        <div class="account-card" id="account-card">
+          <div class="avatar" id="user-avatar"></div>
+          <div>
+            <div class="name" id="user-name">商家协作台</div>
+            <div class="role" id="user-email">Team Workspace</div>
+          </div>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-title" data-i18n="menu.workspace">Workspace</div>
+          <button class="menu-item" data-i18n="menu.dashboard">Dashboard</button>
+          <button class="menu-item active" data-i18n="menu.projects">Projects</button>
+          <button class="menu-item" data-i18n="menu.tasks">Tasks</button>
+          <button class="menu-item" data-i18n="menu.clients">Clients</button>
+          <button class="menu-item" data-i18n="menu.messages">Messages</button>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-title" data-i18n="menu.leads">Leads</div>
+          <button class="menu-item" data-i18n="menu.social">Social Medias</button>
+          <button class="menu-item" data-i18n="menu.email">Email</button>
+          <button class="menu-item" data-i18n="menu.affiliates">Affiliates</button>
+          <button class="menu-item" data-i18n="menu.jobboard">Job Board</button>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-title" data-i18n="menu.tools">工具箱</div>
+          <button class="menu-item" data-page="rate-limit" data-i18n="menu.ratelimit">限流助手</button>
+        </div>
+
+        <div class="menu-group">
+          <div class="menu-title" data-i18n="menu.payments">Payments</div>
+          <button class="menu-item" data-i18n="menu.invoices">Invoices</button>
+          <button class="menu-item" data-i18n="menu.expenses">Expenses</button>
+          <button class="menu-item" data-i18n="menu.income">Income</button>
+          <button class="menu-item" data-i18n="menu.services">Services</button>
+        </div>
+
+      </aside>
+
+      <main class="main-panel" id="main-panel">
+        <!-- 默认页面（Projects等）由 script.js 动态渲染 -->
+        <div id="page-default"></div>
+
+        <!-- 限流助手页面 -->
+        <div id="page-rate-limit" class="page-view" style="display:none">
+          <!-- Step 1: 上传 & 配置 -->
+          <div class="rl-header">
+            <h1>🚦 限流助手</h1>
+            <p class="rl-subtitle">批量同款检查 · AI 图文对比 · 一键导出解绑模板</p>
+          </div>
+
+          <div class="rl-config-bar">
+            <div class="rl-upload-group">
+              <label class="rl-upload-btn" for="rl-file-input">
+                📂 上传 Excel（工作簿格式）
+                <input type="file" id="rl-file-input" accept=".xlsx,.xls" hidden />
+              </label>
+              <span class="rl-file-name" id="rl-file-name">未选择文件</span>
+            </div>
+            <div class="rl-api-group">
+              <input type="password" id="rl-gemini-key" placeholder="Gemini API Key" class="rl-input" />
+              <button class="rl-btn primary" id="rl-start-btn" disabled>▶ 开始批量检查</button>
+            </div>
+          </div>
+
+          <!-- 进度条 -->
+          <div class="rl-progress-bar" id="rl-progress-bar" style="display:none">
+            <div class="rl-progress-info">
+              <span id="rl-progress-text">0 / 0</span>
+              <span id="rl-progress-pct">0%</span>
+            </div>
+            <div class="rl-progress-track">
+              <div class="rl-progress-fill" id="rl-progress-fill"></div>
+            </div>
+          </div>
+
+          <!-- 对比视图 -->
+          <div class="rl-compare-view" id="rl-compare-view" style="display:none">
+            <div class="rl-compare-grid">
+              <!-- 左i：TEMU 商品 -->
+              <div class="rl-card rl-left">
+                <div class="rl-card-header">
+                  <span class="rl-badge temu">左i 当前商品 (TEMU)</span>
+                </div>
+                <div class="rl-images" id="rl-left-images"></div>
+                <div class="rl-info" id="rl-left-info"></div>
+              </div>
+
+              <!-- 右i：竞品 -->
+              <div class="rl-card rl-right">
+                <div class="rl-card-header">
+                  <span class="rl-badge competitor">右i 参考商品</span>
+                </div>
+                <div class="rl-images" id="rl-right-images"></div>
+                <div class="rl-info" id="rl-right-info"></div>
+              </div>
+            </div>
+
+            <!-- AI 判定结果 -->
+            <div class="rl-result-panel" id="rl-result-panel">
+              <div class="rl-result-header">AI 判定结果</div>
+              <div class="rl-result-body" id="rl-result-body">
+                <p class="rl-placeholder">上传 Excel 并点击"开始批量检查"</p>
+              </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="rl-actions" id="rl-actions" style="display:none">
+              <button class="rl-btn outline" id="rl-prev-btn">← 上一条</button>
+              <button class="rl-btn success" id="rl-confirm-btn">✓ 确认结果</button>
+              <button class="rl-btn warning" id="rl-edit-btn">✎ 手动修改</button>
+              <button class="rl-btn primary" id="rl-next-btn">下一条 →</button>
+            </div>
+          </div>
+
+          <!-- 手动修改弹窗 -->
+          <div class="rl-edit-modal" id="rl-edit-modal" style="display:none">
+            <div class="rl-edit-card">
+              <h3>手动修改判定结果</h3>
+              <label>是否同款
+                <select id="rl-edit-same">
+                  <option value="N">N - 不一致</option>
+                  <option value="Y">Y - 完全一致</option>
+                </select>
+              </label>
+              <label>具体原因（多选逗号分隔）
+                <input type="text" id="rl-edit-reason" placeholder="如：尺寸/容积/重量/尺码" />
+              </label>
+              <label>重点关注信息
+                <input type="text" id="rl-edit-focus" placeholder="如：商品标题，主图" />
+              </label>
+              <label>说明
+                <textarea id="rl-edit-desc" rows="3" placeholder="差异描述..."></textarea>
+              </label>
+              <div class="rl-edit-actions">
+                <button class="rl-btn outline" id="rl-edit-cancel">取消</button>
+                <button class="rl-btn primary" id="rl-edit-save">保存</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 结果汇总 & 导出 -->
+          <div class="rl-summary" id="rl-summary" style="display:none">
+            <div class="rl-summary-header">
+              <h2>检查完成</h2>
+              <div class="rl-summary-stats">
+                <span class="rl-stat same" id="rl-stat-same">一致: 0</span>
+                <span class="rl-stat diff" id="rl-stat-diff">不一致: 0</span>
+                <span class="rl-stat total" id="rl-stat-total">总计: 0</span>
+              </div>
+            </div>
+            <table class="rl-table" id="rl-result-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>SKU ID</th>
+                  <th>竞品链接</th>
+                  <th>平台</th>
+                  <th>同款</th>
+                  <th>原因</th>
+                  <th>站点</th>
+                </tr>
+              </thead>
+              <tbody id="rl-result-tbody"></tbody>
+            </table>
+            <button class="rl-btn primary rl-export-btn" id="rl-export-btn">📥 导出 OMS 解绑模板 (.xlsx)</button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="./script.js"></script>
+    <script src="./rate-limit.js"></script>
+  </body>
+</html>
